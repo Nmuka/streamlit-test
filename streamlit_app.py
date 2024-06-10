@@ -15,7 +15,7 @@ st.write("Imagine you are evaluating different models for a Q&A bot "
 
 data = {
     "Questions": 
-        ["Who invented the internet?"
+        ["Who invented the int?"
         , "What causes the Northern Lights?"
         , "Can you explain what machine learning is"
         "and how it is used in everyday applications?"
