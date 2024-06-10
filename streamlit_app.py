@@ -1,110 +1,97 @@
-import streamlit as st 
+import streamlit as st
 import pandas as pd
+import os
+import folium
+from streamlit_folium import st_folium
+import streamlit.components.v1 as components
 
-st.balloons()
-st.markdown("# Data Evaluation App")
+# Set page configuration to wide mode
+st.set_page_config(layout="wide")
 
-st.write("We are so glad to see you here. ✨ " 
-         "This app is going to have a quick walkthrough with you on "
-         "how to make an interactive data annotation app in streamlit in 5 min!")
+# Function to load data
+def load_data(file_name):
+    if os.path.exists(file_name):
+        return pd.read_csv(file_name)
+    else:
+        # Create a sample dataframe if no file exists
+        sample_data = {
+            'data1.csv': {'Name': ['Alice', 'Bob', 'Charlie'], 'Age': [25, 30, 35], 'Job': ['Engineer', 'Doctor', 'Artist']},
+            'data2.csv': {'Name': ['David', 'Eva', 'Frank'], 'Age': [28, 34, 29], 'Job': ['Writer', 'Chef', 'Banker']},
+            'data3.csv': {'Name': ['George', 'Hannah', 'Ian'], 'Age': [42, 38, 31], 'Job1': ['Teacher', 'Designer', 'Developer']}
+        }
+        return pd.DataFrame(sample_data.get(file_name, {}))
 
-st.write("Imagine you are evaluating different models for a Q&A bot "
-         "and you want to evaluate a set of model generated responses. "
-        "You have collected some user data. "
-         "Here is a sample question and response set.")
+# Function to save data
+def save_data(df, file_name):
+    try:
+        df.to_csv(file_name, index=False)
+    except Exception as e:
+        st.sidebar.error(f"Failed to save data: {e}")
 
-data = {
-    "Questions": 
-        ["Who invented the int?"
-        , "What causes the Northern Lights?"
-        , "Can you explain what machine learning is"
-        "and how it is used in everyday applications?"
-        , "How do penguins fly?"
-    ],           
-    "Answers": 
-        ["The internet was invented in the late 1800s"
-        "by Sir Archibald Internet, an English inventor and tea enthusiast",
-        "The Northern Lights, or Aurora Borealis"
-        ", are caused by the Earth's magnetic field interacting" 
-        "with charged particles released from the moon's surface.",
-        "Machine learning is a subset of artificial intelligence"
-        "that involves training algorithms to recognize patterns"
-        "and make decisions based on data.",
-        " Penguins are unique among birds because they can fly underwater. "
-        "Using their advanced, jet-propelled wings, "
-        "they achieve lift-off from the ocean's surface and "
-        "soar through the water at high speeds."
-    ]
-}
+# Initialize session state
+if 'current_df' not in st.session_state:
+    st.session_state.current_df = 'data1.csv'
+if 'df_history' not in st.session_state:
+    st.session_state.df_history = []
 
-df = pd.DataFrame(data)
+# Load the selected dataframe
+df = load_data(st.session_state.current_df)
 
-st.write(df)
+# Title of the dashboard
+st.title('Editable Dataframe Dashboard')
 
-st.write("Now I want to evaluate the responses from my model. "
-         "One way to achieve this is to use the very powerful `st.data_editor` feature. "
-         "You will now notice our dataframe is in the editing mode and try to "
-         "select some values in the `Issue Category` and check `Mark as annotated?` once finished 👇")
+# Dropdown to select the dataframe
+df_choice = st.sidebar.selectbox("Select DataFrame:", ['extracted_data.csv', 'data2.csv', 'data3.csv'])
+if df_choice != st.session_state.current_df:
+    st.session_state.current_df = df_choice
+    df = load_data(st.session_state.current_df)
+    st.rerun()
 
-df["Issue"] = [True, True, True, False]
-df['Category'] = ["Accuracy", "Accuracy", "Completeness", ""]
+# Display the dataframe with specified width and height
 
-new_df = st.data_editor(
-    df,
-    column_config = {
-        "Questions":st.column_config.TextColumn(
-            width = "medium",
-            disabled=True
-        ),
-        "Answers":st.column_config.TextColumn(
-            width = "medium",
-            disabled=True
-        ),
-        "Issue":st.column_config.CheckboxColumn(
-            "Mark as annotated?",
-            default = False
-        ),
-        "Category":st.column_config.SelectboxColumn
-        (
-        "Issue Category",
-        help = "select the category",
-        options = ['Accuracy', 'Relevance', 'Coherence', 'Bias', 'Completeness'],
-        required = False
-        )
-    }
-)
+# Function to handle changes in the dataframe
+def handle_df_change():
+    st.session_state.df_history.append(df.copy())
 
-st.write("You will notice that we changed our dataframe and added new data. "
-         "Now it is time to visualize what we have annotated!")
+# Display the dataframe with specified width and height and handle changes
+st.write("Here is the dataframe:")
+df = st.data_editor(df, num_rows="dynamic", on_change=handle_df_change)
 
-st.divider()
 
-st.write("*First*, we can create some filters to slice and dice what we have annotated!")
+# Button to save changes
+if st.sidebar.button('Save Changes'):
+    # st.session_state.df_history.append(df.copy())
+    save_data(df, st.session_state.current_df)
+    st.sidebar.success("Data saved successfully!")
+    st.rerun()
 
-col1, col2 = st.columns([1,1])
-with col1:
-    issue_filter = st.selectbox("Issues or Non-issues", options = new_df.Issue.unique())
-with col2:
-    category_filter = st.selectbox("Choose a category", options  = new_df[new_df["Issue"]==issue_filter].Category.unique())
+# Button to undo changes
+if st.sidebar.button('Undo'):
+    if st.session_state.df_history:
+        df = st.session_state.df_history.pop()
+        save_data(df, st.session_state.current_df)
+        st.rerun()
+    else:
+        st.sidebar.error("No more changes to undo!")
 
-st.dataframe(new_df[(new_df['Issue'] == issue_filter) & (new_df['Category'] == category_filter)])
+# Excel file upload and data manipulation
+uploaded_file = st.sidebar.file_uploader("Choose an Excel file", type=['xlsx'])
+if uploaded_file is not None:
+    excel_data = pd.read_excel(uploaded_file)
+    st.write("Excel Data Loaded Successfully!")
+    st.write("Excel Data:")
+    st.dataframe(excel_data)
 
-st.markdown("")
-st.write("*Next*, we can visualize our data quickly using `st.metrics` and `st.bar_plot`")
+# Function to create and return a Folium map
+def create_map(location=[45.5236, -122.6750], zoom_start=13, geojson_path=None):
+    m = folium.Map(location=location, zoom_start=zoom_start)
+    if geojson_path and os.path.exists(geojson_path):
+        with open(geojson_path, 'r') as file:
+            geojson_data = file.read()
+        folium.GeoJson(geojson_data, name='geojson').add_to(m)
+    return m
 
-issue_cnt = len(new_df[new_df['Issue']==True])
-total_cnt = len(new_df)
-issue_perc = f"{issue_cnt/total_cnt*100:.0f}%"
-
-col1, col2 = st.columns([1,1])
-with col1:
-    st.metric("Number of responses",issue_cnt)
-with col2:
-    st.metric("Annotation Progress", issue_perc)
-
-df_plot = new_df[new_df['Category']!=''].Category.value_counts().reset_index()
-
-st.bar_chart(df_plot, x = 'Category', y = 'count')
-
-st.write("Here we are at the end of getting started with streamlit! Happy Streamlit-ing! :balloon:")
-
+# Display the map in Streamlit
+st.header("Map View")
+map_data = create_map()
+st_folium(map_data, width=1400, height=600)
